@@ -1,0 +1,837 @@
+# MENUZY API DOCUMENTATION
+# Restaurant Management System Backend API
+# Version: 1.0.0
+# Base URL: http://localhost:8000
+
+===============================================================================
+TABLE OF CONTENTS
+===============================================================================
+1. OVERVIEW
+2. AUTHENTICATION
+3. CUSTOMER APIs
+4. RESTAURANT ADMIN APIs
+5. SUPER ADMIN APIs
+6. ERROR RESPONSES
+7. DATABASE SCHEMA
+8. SETUP INSTRUCTIONS
+9. EXAMPLE REQUESTS & RESPONSES
+
+===============================================================================
+1. OVERVIEW
+===============================================================================
+
+Menuzy is a comprehensive restaurant management system with role-based access:
+- Customers: Browse restaurants, view menus, write reviews, manage favorites
+- Restaurant Admins: Manage their restaurant's menu, location, and view reviews
+- Super Admins: Manage all restaurants, users, and categories
+
+Technology Stack:
+- FastAPI (Python web framework)
+- PostgreSQL (Database)
+- JWT (Authentication)
+- Pydantic (Data validation)
+
+===============================================================================
+2. AUTHENTICATION
+===============================================================================
+
+All protected endpoints require a Bearer token in the Authorization header:
+Authorization: Bearer <your_jwt_token>
+
+Token expires in 30 minutes and contains user ID and role information.
+
+===============================================================================
+3. CUSTOMER APIs
+===============================================================================
+
+3.1 AUTHENTICATION ENDPOINTS
+----------------------------
+
+POST /auth/register
+Description: Register a new customer account
+Body:
+{
+    "email": "customer@example.com",
+    "password": "securepassword123",
+    "full_name": "John Doe",
+    "phone": "+1234567890"
+}
+Response:
+{
+    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+    "token_type": "bearer",
+    "user": {
+        "id": 1,
+        "email": "customer@example.com",
+        "full_name": "John Doe",
+        "phone": "+1234567890",
+        "role": "customer",
+        "is_active": true,
+        "created_at": "2024-01-15T10:30:00"
+    }
+}
+
+POST /auth/login
+Description: Login with email and password
+Body:
+{
+    "email": "customer@example.com",
+    "password": "securepassword123"
+}
+Response: Same as register
+
+POST /auth/google
+Description: Login/Register with Google OAuth
+Body:
+{
+    "google_token": "google_oauth_token_here"
+}
+Status: Not implemented yet (501)
+
+GET /auth/me
+Description: Get current user information
+Headers: Authorization: Bearer <token>
+Response:
+{
+    "id": 1,
+    "email": "customer@example.com",
+    "full_name": "John Doe",
+    "phone": "+1234567890",
+    "role": "customer",
+    "is_active": true,
+    "created_at": "2024-01-15T10:30:00"
+}
+
+3.2 RESTAURANT DISCOVERY ENDPOINTS
+----------------------------------
+
+GET /restaurants/nearby
+Description: Find restaurants near user's location
+Query Parameters:
+- latitude (required): User's latitude
+- longitude (required): User's longitude
+- radius (optional): Search radius in km (default: 10)
+- category_id (optional): Filter by category
+- limit (optional): Number of results (default: 20)
+
+Example: GET /restaurants/nearby?latitude=40.7128&longitude=-74.0060&radius=5&limit=10
+
+Response:
+[
+    {
+        "id": 1,
+        "name": "Pizza Palace",
+        "description": "Authentic Italian pizzas",
+        "address": "123 Main St, New York, NY",
+        "latitude": 40.7128,
+        "longitude": -74.0060,
+        "phone": "+1234567890",
+        "email": "info@pizzapalace.com",
+        "category_id": 4,
+        "category_name": "Pizza",
+        "owner_id": 2,
+        "image_url": "https://example.com/pizza-palace.jpg",
+        "opening_hours": {
+            "monday": "11:00-22:00",
+            "tuesday": "11:00-22:00"
+        },
+        "is_active": true,
+        "rating": 4.5,
+        "total_reviews": 25,
+        "created_at": "2024-01-10T09:00:00",
+        "distance": 2.3
+    }
+]
+
+GET /restaurants/search
+Description: Search restaurants by name, description, or address
+Query Parameters:
+- q (required): Search query
+- category_id (optional): Filter by category
+- limit (optional): Number of results (default: 20)
+
+Example: GET /restaurants/search?q=pizza&category_id=4
+
+Response: Same format as nearby restaurants (without distance)
+
+GET /restaurants/{restaurant_id}
+Description: Get detailed information about a specific restaurant
+Response: Single restaurant object (same format as above)
+
+GET /restaurants/{restaurant_id}/menu
+Description: Get menu items for a specific restaurant
+Response:
+[
+    {
+        "id": 1,
+        "restaurant_id": 1,
+        "menu_category_id": 2,
+        "category_name": "Pizzas",
+        "name": "Margherita Pizza",
+        "description": "Classic pizza with tomato sauce, mozzarella, and basil",
+        "price": {
+            "small": 12.99,
+            "medium": 16.99,
+            "large": 19.99
+        },
+        "image_url": "https://example.com/margherita.jpg",
+        "is_vegetarian": true,
+        "is_vegan": false,
+        "is_gluten_free": false,
+        "ingredients": ["tomato sauce", "mozzarella", "basil"],
+        "allergens": ["dairy", "gluten"],
+        "is_available": true,
+        "display_order": 1,
+        "created_at": "2024-01-10T10:00:00"
+    }
+]
+
+3.3 REVIEW ENDPOINTS
+--------------------
+
+POST /restaurants/{restaurant_id}/review
+Description: Add a review for a restaurant (requires authentication)
+Headers: Authorization: Bearer <token>
+Body:
+{
+    "rating": 5,
+    "comment": "Amazing pizza! Great service and atmosphere."
+}
+Response:
+{
+    "id": 1,
+    "restaurant_id": 1,
+    "user_id": 1,
+    "user_name": "John Doe",
+    "rating": 5,
+    "comment": "Amazing pizza! Great service and atmosphere.",
+    "created_at": "2024-01-15T14:30:00"
+}
+
+GET /restaurants/{restaurant_id}/reviews
+Description: Get reviews for a specific restaurant
+Query Parameters:
+- limit (optional): Number of reviews (default: 50)
+Response: Array of review objects
+
+3.4 FAVORITES ENDPOINTS
+-----------------------
+
+POST /restaurants/favorites/{restaurant_id}
+Description: Add restaurant to favorites
+Headers: Authorization: Bearer <token>
+Response:
+{
+    "message": "Restaurant added to favorites"
+}
+
+DELETE /restaurants/favorites/{restaurant_id}
+Description: Remove restaurant from favorites
+Headers: Authorization: Bearer <token>
+Response:
+{
+    "message": "Restaurant removed from favorites"
+}
+
+GET /restaurants/favorites/my
+Description: Get user's favorite restaurants
+Headers: Authorization: Bearer <token>
+Response: Array of restaurant objects
+
+===============================================================================
+4. RESTAURANT ADMIN APIs
+===============================================================================
+
+4.1 RESTAURANT MANAGEMENT
+-------------------------
+
+GET /admin/restaurant
+Description: Get restaurant owned by current admin
+Headers: Authorization: Bearer <token>
+Response: Restaurant object
+
+4.2 MENU CATEGORY MANAGEMENT
+----------------------------
+
+GET /admin/menu-categories
+Description: Get menu categories for admin's restaurant
+Headers: Authorization: Bearer <token>
+Response:
+[
+    {
+        "id": 1,
+        "restaurant_id": 1,
+        "name": "Appetizers",
+        "description": "Start your meal with our delicious appetizers",
+        "display_order": 1,
+        "is_active": true,
+        "created_at": "2024-01-10T09:30:00"
+    }
+]
+
+POST /admin/menu-categories
+Description: Create a new menu category
+Headers: Authorization: Bearer <token>
+Body:
+{
+    "name": "Desserts",
+    "description": "Sweet treats to end your meal",
+    "display_order": 5
+}
+Response: Created menu category object
+
+4.3 MENU ITEM MANAGEMENT
+------------------------
+
+GET /admin/menu
+Description: Get all menu items for admin's restaurant
+Headers: Authorization: Bearer <token>
+Response: Array of menu item objects
+
+POST /admin/menu
+Description: Create a new menu item
+Headers: Authorization: Bearer <token>
+Body:
+{
+    "menu_category_id": 2,
+    "name": "Pepperoni Pizza",
+    "description": "Classic pepperoni pizza with mozzarella cheese",
+    "price": {
+        "small": 14.99,
+        "medium": 18.99,
+        "large": 22.99,
+        "family": 28.99
+    },
+    "image_url": "https://example.com/pepperoni.jpg",
+    "is_vegetarian": false,
+    "is_vegan": false,
+    "is_gluten_free": false,
+    "ingredients": ["tomato sauce", "mozzarella", "pepperoni"],
+    "allergens": ["dairy", "gluten"],
+    "display_order": 2
+}
+Response: Created menu item object
+
+PUT /admin/menu/{item_id}
+Description: Update a menu item
+Headers: Authorization: Bearer <token>
+Body: Same as POST (all fields optional)
+Response: Updated menu item object
+
+DELETE /admin/menu/{item_id}
+Description: Delete a menu item
+Headers: Authorization: Bearer <token>
+Response:
+{
+    "message": "Menu item deleted successfully"
+}
+
+4.4 LOCATION MANAGEMENT
+-----------------------
+
+PUT /admin/location
+Description: Update restaurant location
+Headers: Authorization: Bearer <token>
+Body:
+{
+    "latitude": 40.7589,
+    "longitude": -73.9851,
+    "address": "456 Broadway, New York, NY 10013"
+}
+Response:
+{
+    "message": "Location updated successfully"
+}
+
+4.5 REVIEWS MANAGEMENT
+----------------------
+
+GET /admin/reviews
+Description: Get all reviews for admin's restaurant
+Headers: Authorization: Bearer <token>
+Response: Array of review objects
+
+===============================================================================
+5. SUPER ADMIN APIs
+===============================================================================
+
+5.1 DASHBOARD
+-------------
+
+GET /superadmin/dashboard
+Description: Get system statistics
+Headers: Authorization: Bearer <token>
+Response:
+{
+    "total_restaurants": 150,
+    "total_users": 1250,
+    "total_reviews": 3500,
+    "total_categories": 10
+}
+
+5.2 RESTAURANT MANAGEMENT
+-------------------------
+
+POST /superadmin/create-restaurant
+Description: Create a new restaurant and assign owner
+Headers: Authorization: Bearer <token>
+Body:
+{
+    "name": "New Restaurant",
+    "description": "Great food and service",
+    "address": "789 Food St, Chicago, IL",
+    "latitude": 41.8781,
+    "longitude": -87.6298,
+    "phone": "+1234567899",
+    "email": "info@newrestaurant.com",
+    "category_id": 1,
+    "image_url": "https://example.com/restaurant.jpg",
+    "opening_hours": {
+        "monday": "09:00-21:00",
+        "tuesday": "09:00-21:00"
+    }
+}
+Query Parameters:
+- owner_email: Email of restaurant owner
+- owner_name: Full name of owner
+- owner_phone: Phone number (optional)
+
+Example: POST /superadmin/create-restaurant?owner_email=owner@example.com&owner_name=Jane Smith
+
+Response: Created restaurant object
+
+GET /superadmin/restaurants
+Description: Get all restaurants in the system
+Headers: Authorization: Bearer <token>
+Response: Array of restaurant objects
+
+PUT /superadmin/restaurant/{restaurant_id}
+Description: Update any restaurant
+Headers: Authorization: Bearer <token>
+Body: Restaurant update fields (all optional)
+Response: Updated restaurant object
+
+5.3 USER MANAGEMENT
+-------------------
+
+GET /superadmin/users
+Description: Get all users in the system
+Headers: Authorization: Bearer <token>
+Response: Array of user objects
+
+GET /superadmin/user/{user_id}
+Description: Get detailed information about a specific user
+Headers: Authorization: Bearer <token>
+Response: User object
+
+5.4 CATEGORY MANAGEMENT
+-----------------------
+
+GET /superadmin/categories
+Description: Get all categories
+Headers: Authorization: Bearer <token>
+Response:
+[
+    {
+        "id": 1,
+        "name": "Fast Food",
+        "description": "Quick service restaurants",
+        "icon": "🍔",
+        "is_active": true,
+        "created_at": "2024-01-01T00:00:00"
+    }
+]
+
+POST /superadmin/categories
+Description: Create a new category
+Headers: Authorization: Bearer <token>
+Body:
+{
+    "name": "Seafood",
+    "description": "Fresh seafood restaurants",
+    "icon": "🐟"
+}
+Response: Created category object
+
+PUT /superadmin/categories/{category_id}
+Description: Update a category
+Headers: Authorization: Bearer <token>
+Body: Same as POST
+Response: Updated category object
+
+DELETE /superadmin/categories/{category_id}
+Description: Delete a category (only if not used by restaurants)
+Headers: Authorization: Bearer <token>
+Response:
+{
+    "message": "Category deleted successfully"
+}
+
+===============================================================================
+6. ERROR RESPONSES
+===============================================================================
+
+All error responses follow this format:
+{
+    "detail": "Error message description"
+}
+
+Common HTTP Status Codes:
+- 200: Success
+- 201: Created
+- 400: Bad Request (validation errors, business logic errors)
+- 401: Unauthorized (invalid or missing token)
+- 403: Forbidden (insufficient permissions)
+- 404: Not Found
+- 422: Validation Error (invalid request body)
+- 500: Internal Server Error
+
+Example Error Responses:
+
+400 Bad Request:
+{
+    "detail": "Email already registered"
+}
+
+401 Unauthorized:
+{
+    "detail": "Could not validate credentials"
+}
+
+403 Forbidden:
+{
+    "detail": "Not authorized to access restaurant admin features"
+}
+
+404 Not Found:
+{
+    "detail": "Restaurant not found"
+}
+
+422 Validation Error:
+{
+    "detail": [
+        {
+            "loc": ["body", "email"],
+            "msg": "field required",
+            "type": "value_error.missing"
+        }
+    ]
+}
+
+===============================================================================
+7. DATABASE SCHEMA
+===============================================================================
+
+7.1 USERS TABLE
+---------------
+- id: SERIAL PRIMARY KEY
+- email: VARCHAR(255) UNIQUE NOT NULL
+- password_hash: VARCHAR(255)
+- full_name: VARCHAR(255) NOT NULL
+- phone: VARCHAR(20)
+- role: VARCHAR(20) DEFAULT 'customer' (customer, restaurant_admin, super_admin)
+- google_id: VARCHAR(255)
+- is_active: BOOLEAN DEFAULT TRUE
+- created_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- updated_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+7.2 CATEGORIES TABLE
+-------------------
+- id: SERIAL PRIMARY KEY
+- name: VARCHAR(100) NOT NULL UNIQUE
+- description: TEXT
+- icon: VARCHAR(255)
+- is_active: BOOLEAN DEFAULT TRUE
+- created_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+7.3 RESTAURANTS TABLE
+---------------------
+- id: SERIAL PRIMARY KEY
+- name: VARCHAR(255) NOT NULL
+- description: TEXT
+- address: TEXT NOT NULL
+- latitude: DECIMAL(10, 8)
+- longitude: DECIMAL(11, 8)
+- phone: VARCHAR(20)
+- email: VARCHAR(255)
+- category_id: INTEGER REFERENCES categories(id)
+- owner_id: INTEGER REFERENCES users(id)
+- image_url: VARCHAR(500)
+- opening_hours: JSONB
+- is_active: BOOLEAN DEFAULT TRUE
+- rating: DECIMAL(3, 2) DEFAULT 0.0
+- total_reviews: INTEGER DEFAULT 0
+- created_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- updated_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+7.4 MENU_CATEGORIES TABLE
+-------------------------
+- id: SERIAL PRIMARY KEY
+- restaurant_id: INTEGER REFERENCES restaurants(id) ON DELETE CASCADE
+- name: VARCHAR(100) NOT NULL
+- description: TEXT
+- display_order: INTEGER DEFAULT 0
+- is_active: BOOLEAN DEFAULT TRUE
+- created_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+7.5 MENU_ITEMS TABLE
+--------------------
+- id: SERIAL PRIMARY KEY
+- restaurant_id: INTEGER REFERENCES restaurants(id) ON DELETE CASCADE
+- menu_category_id: INTEGER REFERENCES menu_categories(id) ON DELETE CASCADE
+- name: VARCHAR(255) NOT NULL
+- description: TEXT
+- price: JSONB NOT NULL (stores different pricing options)
+- image_url: VARCHAR(500)
+- is_vegetarian: BOOLEAN DEFAULT FALSE
+- is_vegan: BOOLEAN DEFAULT FALSE
+- is_gluten_free: BOOLEAN DEFAULT FALSE
+- ingredients: TEXT[]
+- allergens: TEXT[]
+- is_available: BOOLEAN DEFAULT TRUE
+- display_order: INTEGER DEFAULT 0
+- created_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- updated_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+7.6 REVIEWS TABLE
+-----------------
+- id: SERIAL PRIMARY KEY
+- restaurant_id: INTEGER REFERENCES restaurants(id) ON DELETE CASCADE
+- user_id: INTEGER REFERENCES users(id) ON DELETE CASCADE
+- rating: INTEGER CHECK (rating >= 1 AND rating <= 5)
+- comment: TEXT
+- created_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- UNIQUE(restaurant_id, user_id)
+
+7.7 FAVORITES TABLE
+-------------------
+- id: SERIAL PRIMARY KEY
+- user_id: INTEGER REFERENCES users(id) ON DELETE CASCADE
+- restaurant_id: INTEGER REFERENCES restaurants(id) ON DELETE CASCADE
+- created_at: TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- UNIQUE(user_id, restaurant_id)
+
+===============================================================================
+8. SETUP INSTRUCTIONS
+===============================================================================
+
+8.1 PREREQUISITES
+-----------------
+- Python 3.8+
+- PostgreSQL 12+
+- pip (Python package manager)
+
+8.2 INSTALLATION STEPS
+----------------------
+
+1. Clone the repository:
+   git clone <repository-url>
+   cd menuzy-backend
+
+2. Create virtual environment:
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+3. Install dependencies:
+   pip install -r requirements.txt
+
+4. Setup PostgreSQL database:
+   - Create a database named 'menuzy'
+   - Create a user with appropriate permissions
+
+5. Configure environment variables:
+   cp .env.example .env
+   # Edit .env file with your database credentials
+
+6. Run the application:
+   python main.py
+
+7. The API will be available at: http://localhost:8000
+
+8. Access API documentation:
+   - Swagger UI: http://localhost:8000/docs
+   - ReDoc: http://localhost:8000/redoc
+
+8.3 ENVIRONMENT VARIABLES
+-------------------------
+DB_HOST=localhost
+DB_NAME=menuzy
+DB_USER=postgres
+DB_PASSWORD=your_password
+DB_PORT=5432
+SECRET_KEY=your-super-secret-key-here
+
+8.4 SAMPLE DATA
+---------------
+To load sample data, run the SQL script:
+psql -U postgres -d menuzy -f scripts/sample_data.sql
+
+===============================================================================
+9. EXAMPLE REQUESTS & RESPONSES
+===============================================================================
+
+9.1 CUSTOMER REGISTRATION AND LOGIN
+-----------------------------------
+
+# Register new customer
+curl -X POST "http://localhost:8000/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "securepass123",
+    "full_name": "John Doe",
+    "phone": "+1234567890"
+  }'
+
+# Login
+curl -X POST "http://localhost:8000/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "securepass123"
+  }'
+
+9.2 FIND NEARBY RESTAURANTS
+---------------------------
+
+curl -X GET "http://localhost:8000/restaurants/nearby?latitude=40.7128&longitude=-74.0060&radius=5"
+
+9.3 GET RESTAURANT MENU
+-----------------------
+
+curl -X GET "http://localhost:8000/restaurants/1/menu"
+
+9.4 ADD REVIEW (AUTHENTICATED)
+------------------------------
+
+curl -X POST "http://localhost:8000/restaurants/1/review" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rating": 5,
+    "comment": "Excellent pizza and great service!"
+  }'
+
+9.5 RESTAURANT ADMIN - ADD MENU ITEM
+------------------------------------
+
+curl -X POST "http://localhost:8000/admin/menu" \
+  -H "Authorization: Bearer ADMIN_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "menu_category_id": 2,
+    "name": "Supreme Pizza",
+    "description": "Loaded with pepperoni, sausage, peppers, and onions",
+    "price": {
+      "small": 16.99,
+      "medium": 20.99,
+      "large": 24.99
+    },
+    "is_vegetarian": false,
+    "ingredients": ["tomato sauce", "mozzarella", "pepperoni", "sausage", "peppers", "onions"],
+    "allergens": ["dairy", "gluten"]
+  }'
+
+9.6 SUPER ADMIN - CREATE RESTAURANT
+-----------------------------------
+
+curl -X POST "http://localhost:8000/superadmin/create-restaurant?owner_email=newowner@example.com&owner_name=Jane Smith" \
+  -H "Authorization: Bearer SUPERADMIN_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Burger Junction",
+    "description": "Gourmet burgers and fries",
+    "address": "789 Burger Ave, Miami, FL",
+    "latitude": 25.7617,
+    "longitude": -80.1918,
+    "phone": "+1305555000",
+    "email": "info@burgerjunction.com",
+    "category_id": 1,
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    }
+  }'
+
+9.7 PRICE JSON EXAMPLES
+-----------------------
+
+Simple pricing:
+{
+  "regular": 12.99
+}
+
+Size-based pricing:
+{
+  "small": 8.99,
+  "medium": 12.99,
+  "large": 16.99
+}
+
+Quality-based pricing:
+{
+  "standard": 15.99,
+  "premium": 19.99,
+  "deluxe": 24.99
+}
+
+Quantity-based pricing:
+{
+  "single": 3.99,
+  "double": 6.99,
+  "triple": 9.99
+}
+
+Complex pricing with multiple options:
+{
+  "sizes": {
+    "small": 12.99,
+    "large": 18.99
+  },
+  "toppings": {
+    "extra_cheese": 2.00,
+    "pepperoni": 2.50,
+    "mushrooms": 1.50
+  },
+  "crust": {
+    "thin": 0.00,
+    "thick": 2.00,
+    "stuffed": 4.00
+  }
+}
+
+===============================================================================
+TESTING ENDPOINTS
+===============================================================================
+
+You can test all endpoints using:
+1. Swagger UI: http://localhost:8000/docs
+2. Postman collection (import the OpenAPI spec)
+3. curl commands (examples provided above)
+4. Python requests library
+
+For authentication testing, first register/login to get a JWT token, then use it in subsequent requests.
+
+Default test credentials (after running sample data):
+- Super Admin: admin@menuzy.com / password123
+- Restaurant Admin: john@pizzapalace.com / password123
+- Customer: customer1@example.com / password123
+
+===============================================================================
+SUPPORT & MAINTENANCE
+===============================================================================
+
+For issues or questions:
+1. Check the error response format
+2. Verify authentication tokens
+3. Validate request body format
+4. Check database connectivity
+5. Review server logs
+
+The API includes comprehensive error handling and validation to help identify issues quickly.
