@@ -1,21 +1,31 @@
+import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import os
 from contextlib import contextmanager
+from dotenv import load_dotenv
 
-DATABASE_CONFIG = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'database': os.getenv('DB_NAME', 'menuzy'),
-    'user': os.getenv('DB_USER', 'postgres'),
-    'password': os.getenv('DB_PASSWORD', 'postgres'),
-    'port': os.getenv('DB_PORT', '5432')
-}
+# Load .env file for local development
+load_dotenv()
+
+# Prefer DATABASE_URL (Render), fallback to manual config for local
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    DB_CONN_STRING = DATABASE_URL
+else:
+    DB_CONN_STRING = (
+        f"postgresql://{os.getenv('DB_USER', 'postgres')}:"
+        f"{os.getenv('DB_PASSWORD', 'postgres')}@"
+        f"{os.getenv('DB_HOST', 'localhost')}:"
+        f"{os.getenv('DB_PORT', '5432')}/"
+        f"{os.getenv('DB_NAME', 'menuzy')}"
+    )
 
 @contextmanager
 def get_db_connection():
     conn = None
     try:
-        conn = psycopg2.connect(**DATABASE_CONFIG)
+        conn = psycopg2.connect(DB_CONN_STRING, cursor_factory=RealDictCursor)
         yield conn
     except Exception as e:
         if conn:
@@ -30,7 +40,7 @@ def init_db():
     with get_db_connection() as conn:
         cursor = conn.cursor()
         
-        # Create tables
+        # Users table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -46,6 +56,7 @@ def init_db():
             );
         """)
         
+        # Categories table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS categories (
                 id SERIAL PRIMARY KEY,
@@ -57,6 +68,7 @@ def init_db():
             );
         """)
         
+        # Restaurants table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS restaurants (
                 id SERIAL PRIMARY KEY,
@@ -79,6 +91,7 @@ def init_db():
             );
         """)
         
+        # Menu categories
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS menu_categories (
                 id SERIAL PRIMARY KEY,
@@ -91,6 +104,7 @@ def init_db():
             );
         """)
         
+        # Menu items
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS menu_items (
                 id SERIAL PRIMARY KEY,
@@ -112,6 +126,7 @@ def init_db():
             );
         """)
         
+        # Reviews
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS reviews (
                 id SERIAL PRIMARY KEY,
@@ -124,6 +139,7 @@ def init_db():
             );
         """)
         
+        # Favorites
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS favorites (
                 id SERIAL PRIMARY KEY,
@@ -134,13 +150,13 @@ def init_db():
             );
         """)
         
-        # Create indexes
+        # Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_restaurants_location ON restaurants(latitude, longitude);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_restaurants_category ON restaurants(category_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_menu_items_restaurant ON menu_items(restaurant_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_reviews_restaurant ON reviews(restaurant_id);")
         
-        # Insert default categories
+        # Default categories
         cursor.execute("""
             INSERT INTO categories (name, description, icon) VALUES
             ('Fast Food', 'Quick service restaurants', '🍔'),
@@ -157,4 +173,4 @@ def init_db():
         """)
         
         conn.commit()
-        print("Database initialized successfully!")
+        print("✅ Database initialized successfully!")
